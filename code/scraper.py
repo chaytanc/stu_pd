@@ -31,13 +31,17 @@ from driver import Driver
 # General Scraper for inheritance
 from general_scraper import * 
 
-url = "https://angel.co/companies?stage=Seed" 
+url = "https://angel.co/companies?" 
 #driver = Driver.get_driver()
 
 #XXX have moved many things from __init__ into separate functions and may need
 # to access stored values differently
 # Also, general_scraper is no longer a class so calling functions like log_time
 # may need adjustment
+
+#XXX program constantly checks for drivers present and loaded urls and
+# that company count is greater than none etc... it is defensive and
+# costly in terms of complexity so I wonder if there is a better way
 
 class AngelListScraper():
 	def __init__(self, base_url, driver,
@@ -266,7 +270,8 @@ class AngelListScraper():
 
 	# changed func name from generate_url_list_of_search_pages
 	#XXX return url_df
-	def generate_search_page_urls(self, use_existing_url_list=False
+	def generate_search_page_urls(self, use_existing_url_list=False,
+		raised_filters, stage_filters,
 		market_filters, featured_filters, 
 		location_filters, signal_filters):
 
@@ -308,17 +313,18 @@ class AngelListScraper():
 		url_list = []
 
 		# Gets every combination of filter urls
-		for mf in market_filters:
-			for ff in featured_filters:
-				for lf in location_filters:
-					for sf in signal_filters:
+		for mf in market_filters: # OR
+			for ff in featured_filters: # XXX
+				for lf in location_filters: # OR
+					for sf in signal_filters: # AND
 						target_url = self.url + mf + ff + lf + sf[0]
 						company_count = self.get_company_count_on_search_page(
 								target_url=target_url)
 
-						self.make_url_dict(target_url, company_count, ff, sf)
+						self.make_company_dict(
+							target_url, company_count, ff, sf)
 
-						#XXX Why?
+						# so as not to query the server too much
 						self.url_generator_pause()
 						
 						divisor = self.get_divisor(company_count)
@@ -339,11 +345,10 @@ class AngelListScraper():
 		elif random.random() < .95:
 			set_pause(1)
 
-	#XXX I don't think this actually divides the url into fewer companies per
-	# page and definitely need to this this later
-
 	# SHOULD take a search which returns more than 400 companies and create
 	# multiple urls with =< 400 companies so that they can all be scraped
+	# adds 'and' filters (those that decrease comp. count) if there are too 
+	# many companies on a page.
 	def divide_url_companies(self, tmp_filter_list, 
 		target_url, url_list, ff, sf):
 
@@ -375,6 +380,7 @@ class AngelListScraper():
 				'to the url_list: {}'.format(target_url))
 			log_time(msg=empty_list_msg)
 
+	#XXX not applicable bc the "dividing" company method may include duplicates
 	def get_divisor(self, company_count):
 		# Round up number of times to divide company count per page
 		divisor = math.ceil(company_count / 400)
@@ -391,23 +397,23 @@ class AngelListScraper():
 
 		new_search_msg = '*** New search, target_url: {}'.format(target_url)
 		log_time('highlight', msg=new_search_msg)
-		sys.stdout.flush()
+		#XXX put in log function
+		#sys.stdout.flush()
 
+		#XXX ?? get from general_scraper
 		driver = self.new_driver(driver_in)
 
-		#XXX program constantly checks for drivers present and loaded urls and
-		# that company count is greater than none etc... it is defensive and
-		# costly in terms of complexity so I wonder if there is a better way
+		try self.limited_load_url(target_url, driver):
+			page = driver.page_source
+			if driver_in is None:
+				quit_driver(driver)
+	
+			company_count = self.parse_comp_count(page)
 
-		#XXX should only be one return
-		#if not self.limited_load_url(target_url, driver):
-			#return None
+		#XXX catch specific 'unloaded page' error
+		except someerror:	
+			company_count = 0
 
-		page = driver.page_source
-		if driver_in is None:
-			quit_driver(driver)
-
-		company_count = self.parse_comp_count(page)
 		return company_count
 
 	def parse_comp_count(self, page):
@@ -450,14 +456,20 @@ class AngelListScraper():
 	def parse_all_search_pages(self, use_file=None):
 		# use self.url_df if not using a file
 		if use_file is None:  
-			self.url_df = self.url_df.iloc[np.random.permutation(
-				len(self.url_df))]
 			# shuffle to help resuming at random entry point
+			self.url_df = self.randomize_urls(url_df)
+
 			for idx, row in self.url_df.iterrows():
 				self.parse_one_search_page(url_dict=row)
 		else:
-			#XXX what?
+			#XXX different way to do this? use log and raise exception?
 			assert 0
+
+	#XXX could document in Jupyter notebook with iloc picture/example
+	# Used to not get blocked
+	def randomize_urls(self, url_df):
+		df = url_df.iloc[np.random.permutation(len(url_df))]
+		return df
 
 	def parse_one_search_page(self, url_dict=None):
 		assert url_dict is not None
@@ -491,9 +503,12 @@ class AngelListScraper():
 			results = self.get_click_sorted_results(company_count, 
 				click_sort, driver, url)
 
+			#XXX necessary?
+			if results:
+				N_rows_new = self.get_number_rows(results)
+
 			entries = []
 
-			#########################editing#below#######################33
 			while N_click < N_click_max:
 				output_fname = result_fname.format(N_click)
 				start_row = N_rows
@@ -940,14 +955,24 @@ class AngelListScraper():
 
 
 	#XXX messed up probably
-	def start():
+	def start(dir_lst, market_label_file, locations, signal_pair_list
+			raised_pair_list, stage_list):
+
 		self.construct_dir_tree(dir_list)
-		self.setup_market_filters(market_label_file)
-		self.setup_location_filters(locations)
-		self.setup_signal_filters(signal_pair_list)
-		self.setup_featured_filter()
-		self.setup_raised_filter(raised_pair_list)
-		self.setup_stage_filter(stage_list)
+
+		market_filters = self.setup_market_filters(market_label_file)
+		location_filters = self.setup_location_filters(locations)
+		signal_filters = self.setup_signal_filters(signal_pair_list)
+		featured_filters = self.setup_featured_filter()
+		raised_filters = self.setup_raised_filter(raised_pair_list)
+		stage_filters = self.setup_stage_filter(stage_list)
+
+		self.generate_search_page_urls(use_existing_url_list=False,
+			raised_filters, stage_filters,
+			market_filters, featured_filters, 
+			location_filters, signal_filters)
+
+
 
 	def teardown(self):
 		#XXX Logical loop?

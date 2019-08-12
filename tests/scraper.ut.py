@@ -1,12 +1,11 @@
-#! /usr/bin/python
-
+#! /usr/bin/python3
 # vim: set sw=4 noet ts=4 fileencoding=utf-8:
 
 import unittest
 import sys
 import os
 sys.path.append('./../')
-from scraper import AngelListScraper
+from scraper_new import Scraper
 from driver import Driver
 
 
@@ -27,6 +26,8 @@ class TestAngelListScraper(unittest.TestCase):
 		
 		page_loaded = self.scraper.limited_load_url(n_attempts_limit=0)
 		self.assertFalse(page_loaded)
+		#XXX
+		skipTest()
 
 	def test_check_dir_exists_200(self):
 		# setup
@@ -39,6 +40,8 @@ class TestAngelListScraper(unittest.TestCase):
 		# teardown self.new_dir if made
 		if os.path.exists(self.new_dir):
 			os.rmdir(self.new_dir)
+		#XXX
+		skipTest()
 
 	def test_construct_dir_tree_300(self):
 		# setup dirs for testing
@@ -53,6 +56,13 @@ class TestAngelListScraper(unittest.TestCase):
 		for d in dir_lst:
 			if os.path.exists(d):
 				os.rmdir(d)
+		#XXX
+		skipTest()
+
+	def test_get_ranged_filter_url_appendage_400(self):
+		ranged_filter_dict = {raised : [10000, 400000]}
+		self.scraper.get_ranged_filter_url_appendage(ranged_filter_dict)
+		assert 
 
 	def tearDown(self):
 		pass
