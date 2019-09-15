@@ -38,6 +38,9 @@ from general_scraper import *
 # Webscraping browser
 from driver import Driver
 
+# For debugging interactively
+import code
+
 
 # input filters to use
     # main.py
@@ -168,11 +171,12 @@ class Scraper():
 			button = driver.wait.until(ec.element_to_be_clickable(
 				(By.CLASS_NAME, str(cls))))
 		except TimeoutException:
-			last_page_msg = 'exhausted page length'
-			log_time('info', msg=last_page_msg)
+			not_clickable_msg = 'button does not exist or is not clickable'
+			log_time('info', msg=not_clickable_msg)
 
 		return button
 
+	#XXX trying to wait for it to be clickable before looping thru 
 	def indefinitely_click_button(self, button):
 		''' Clicks button until it is no longer available to click
 		Args:
@@ -181,6 +185,7 @@ class Scraper():
 
 		while button: 
 			try:
+				button = driver.wait.until(ec.element_to_be_clickable(button))
 				button.click()
 				set_pause(1)
 			except:
@@ -210,7 +215,7 @@ class Scraper():
 			company_count = int(parser_count.search(company_count).group(1))
 
 		except:
-			write_debug_error(self.debug_error, page)
+			write_debug_error(self.debug_dir, page)
 			company_count = 0
 
 		comp_found_msg = '****found {} companies**** '.format(company_count)
@@ -221,25 +226,64 @@ class Scraper():
 	# Specific
 	def get_click_list(self):
 		''' A list of buttons to click on to sort company results '''
-		click_sort_list = ['signal', 'joined', 'raised']  
+		click_sort_list = ['location', 'joined.sortable', 
+			'market', 'raised.sortable']  
 		return click_sort_list
+#
+#	# Gets results which are sorted based on a certain filter.
+#	# Ex: if the click_sort was signal it would get results with highest
+#	# signal to lowest
+#	# Specific
+#	def get_click_sorted_results(self, 
+#		company_count, click_sort, 
+#		soup, page, driver):
+#
+#		if company_count > 0:
+#			# Clicking on different ways to sort the company list
+#			sort_button = self.get_css_selector(click_sort, driver)
+#			self.click_available_button(driver, sort_button)
+#
+#			click_button_msg = 'clicking sort button: {}'.format(
+#				sort_button)
+#			log_time('info', msg=click_button_msg)
+#
+#			results = self.get_results(soup, page)
+#			set_pause(1)
+#			log_time('h', 'Got results: {} \n'.format(results))
+#
+#		else: 
+#			msg = '\n' + '0 companies found' + '\n'
+#			write_debug_error(self.debug_dir, page, msg)
+#			Driver.teardown_driver(driver)
+#		return results
 
-	# Gets results which are sorted based on a certain filter.
-	# Ex: if the click_sort was signal it would get results with highest
-	# signal to lowest
-	# Specific
+	#XXX may want to revert to not clicking automatically
+	#XXX need to shorten
 	def get_click_sorted_results(self, 
-		company_count, click_sort, 
+		company_count, click_sort_list, 
 		soup, page, driver):
 
 		if company_count > 0:
-			# Clicking on different ways to sort the company list
-			sort_button = self.get_css_selector(click_sort)
-			self.click_available_button(driver, sort_button)
+			for click_sort in click_sort_list:
+				sort_css = self.get_sort_column_css(click_sort)
+				sort_clickable = self.click_available_button(driver, sort_css)
+				attempt = 0
+				while not sort_clickable and attempt == range(0,5):
+					slide_css = 'column slider'
+					slide_clickable = self.click_available_button(
+						driver, slide_css)
+					if slide_clickable:
+						sort_clickable = self.click_available_button(
+							driver, sort_css)
+					else:
+						log_time(msg='Slider not clickable')
+					attempt += 1
 
-			click_button_msg = 'clicking sort button: {}'.format(
-				css_selector_str)
-			log_time('info', msg=click_button_msg)
+				if not sort_clickable:
+					msg = 'Could not sort companies or slide sort' +\
+						'buttons!'
+					write_debug_error(self.debug_dir, msg=msg)
+					log_time('error', msg=msg)
 
 			results = self.get_results(soup, page)
 			set_pause(1)
@@ -249,50 +293,100 @@ class Scraper():
 			msg = '\n' + '0 companies found' + '\n'
 			write_debug_error(self.debug_dir, page, msg)
 			Driver.teardown_driver(driver)
+
 		return results
 
-	# Specific
-	def get_css_selector(self, click_sort):
-		''' Gets a css string from a column div. Gets sort button in this case.
-		>>> s.get_css_selector('joined')
-		'div.column.joined.sortable'
-		'''
-		css_selector_str = 'div.column.{}.sortable'.format(click_sort)
+#	# General
+#	#XXX basically the same as click_available_button
+#	def get_css_button(self, driver, css_cls):
+#		''' Returns true if a button (found based on specific css class)
+#		is clickable. '''
+#
+#		try:
+#			driver.wait.until(ec.element_to_be_clickable(By.CSS_SELECTOR, css_cls))
+#			clickable = True
+#		except TimeoutException:
+#			clickable = False
+#			msg = 'Button click timed out when attempting to sort companies by ' +\
+#				str(css_cls)
+#			write_debug_error(self.debug_dir, msg=msg)
+#
+#		return clickable
 
+
+	# Specific
+	def get_sort_column_css(self, click_sort):
+		''' 
+		>>> click_sort = 'raised'
+		>>> out = S.get_sort_column_strs(click_sort)
+		>>> out == 'div.column.raised.sortable'
+		'''
+
+		#css_selector_str = 'div.column.{}.sortable'.format(click_sort)
+		css_selector_str = 'div.column.{}'.format(click_sort)
 		return css_selector_str
 
+
 	# General
-	def click_available_button(self, driver, css_selector_str):
+	def click_available_button(self, driver, css_str):
 		''' Clicks button when available, can be used for sort_button. '''
 
+		clickable = False
 		try:
-			button = driver.wait.until(
-				ec.element_to_be_clickable(
-					(By.CSS_SELECTOR, css_selector_str)))
-			button.click()
+			#XXX js version of clicking
+			element = driver.find_element_by_css_selector(css_str)
+			driver.execute_script("arguments[0].click();", element)
+#			button = driver.wait.until(
+#				ec.element_to_be_clickable(
+#					(By.CSS_SELECTOR, css_str)))
+#			button.click()
 			set_pause(1)
-		except:
-			fail_click_msg = 'failed to click'
+			clickable = True
+
+		except TimeoutException as e:
+			fail_click_msg = 'failed to click {} due to TimeoutException; '.format(
+				css_str) + str(e) 
 			log_time('error', msg=fail_click_msg)
+			write_debug_error(self.debug_dir, msg=fail_click_msg)
+
+		return clickable
 	
-	#XXX print out results at this step with code.interact
-	#XXX broken
+	#XXX would need to mock the driver, the the page and the soup and I refuse
+	# to do that for something  I can just debug I guess.
 	# Specific
-	#################################testing#################################
 	def get_results(self, soup, page):
 		''' Gets every aspect on main search page and stores in results. Aspects
 		include date joined and website link etc...
-
-		>>> soup = bs4.
-		>>> s.get_results(
 		'''
-		try:
-			results = soup.findall(class_='results')[0]('div', attrs={
-				'data-_tn' : 'companies/row'})
-		except Exception as e:
-			log_time('e', str(e))
-			write_debug_error(self.debug_dir, e)
-			results = None
+		#try:
+		print(soup)
+
+		#for div in soup.find_all(class_='results'):
+			#results = div.find('div', attrs={'data-_tn' : 'companies/row'})
+
+		#XXX did not work, index error
+		#results = soup(class_='results')[0]('div', attrs={
+			#'data-_tn' : 'companies/row'})
+
+		#XXX THIS WORKS IF NO CAPTCHA! PRINTS:
+#		Got results: [<div class=" dc59 frs86 _a _jm" data-_tn="companies/results"><div class="top">
+#<div class="count">
+#700 Companies
+#</div>
+#<div class="loader">
+#<div class="loader-repl"></div>
+#</div>
+#</div>
+#</div>]
+		results = soup.findAll('div', 
+			attrs={'data-_tn' : 'companies/results'})
+		
+
+
+		#except Exception as e:
+			#log_time('e', str(e))
+			#write_debug_error(self.debug_dir, e)
+			#results = None
 
 		return results
 
@@ -310,22 +404,35 @@ class Scraper():
 			optimize = 'False'
 		return optimize
 
+#################working on it#################################################
 	def optimize(self, optimize, company_count, soup, page, driver):
 		''' Uses sorting companies by click on signal/joined etc... sort buttons
 		to get more of the companies not shown by the first 400
 		'''
 		if optimize:
 			click_sort_list = self.get_click_list()
-			for click_sort in click_sort_list:
-				results = self.get_click_sorted_results(
-					company_count, click_sort, soup, page, driver)
+			results = self.get_click_sorted_results(
+				company_count, click_sort_list, soup, page, driver)
+
+
+#def setUp(test):
+	#test.globs['y'] = 1
 
 if __name__ == '__main__':
 	import doctest
+	import minimock
+	import unittest
+	import urllib
 	mock_dir_lst = ['mock']
-	mock_html = './mock/html.txt'
-	urllib.urlretrieve('https://angel.co/companies?', mock_html)
+	#mock_html = './mock/html.txt'
+	#urllib.urlretrieve('https://angel.co/companies?', mock_html)
 	doctest.testmod(extraglobs={'s': Scraper(mock_dir_lst)})
+
+	suite = doctest.DocTestSuite(
+		extraglobs={'s': Scraper(mock_dir_lst)}
+		)
+	# setUp= , tearDown= 
+	suite.run(unittest.TestResult())
 
 	# get url for filters and maximize individual companies:
 		# get company count

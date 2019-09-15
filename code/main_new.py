@@ -26,10 +26,10 @@ class Main():
 		# Signal is between 1-10
 		self.ranged_filter_dict = {
 			'raised' : [10000, 15000],
-			'signal' : []}
+			'signal' : [1,9]}
 
 		self.root_url = 'https://angel.co/companies?'
-		self.parser = 'lxml' 
+		self.parser = "lxml" 
 		self.driver = Driver.get_driver()
 
 #		self.visit_inner = True  # inner pages are comapny detail pages
@@ -37,7 +37,7 @@ class Main():
 #		self.mute_display = False
 		
 		# Dirs here will be created if they don't already exist
-		self.dir_lst = ['output', 'output/debug_dir']
+		self.dir_lst = ['../output', '../output/debug_dir']
 
 	def main(self):
 		scraper = Scraper(self.dir_lst)

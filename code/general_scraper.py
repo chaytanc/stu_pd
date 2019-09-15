@@ -40,7 +40,6 @@ def log_time(kind='general', color_str=None, msg=''):
 
 #XXX make program fail? Can't work w/out comp count...
 #XXX write which function it was used in
-#XXX belongs with the logger in general scraper
 #XXX kill program?, ask for different search criteria?
 #XXX clear each time this runs? setting?
 # debug_dir is dir it will write to, page is what it will write

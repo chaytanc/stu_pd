@@ -22,12 +22,14 @@ class Driver():
 	#XXX new init_driver func, headless
 	@staticmethod
 	def get_driver():
-	    vdisplay = Xvfb(width=1280, height=720)
-	    vdisplay.start()
-	    dr = webdriver.Firefox()
-	    dr.wait = WebDriverWait(dr, 5)
-	    dr.set_page_load_timeout(25)
-	    return dr
+		vdisplay = Xvfb(width=1280, height=720)
+		vdisplay.start()
+		dr = webdriver.Firefox()
+		dr.wait = WebDriverWait(dr, 5)
+		# Wait is so that slow JS websites will load
+		WebDriverWait(dr, 10)
+		dr.set_page_load_timeout(25)
+		return dr
 
 	@staticmethod
 	def teardown_driver(dr):
