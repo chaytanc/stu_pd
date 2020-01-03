@@ -147,9 +147,11 @@ class Scraper():
 		company_count = self.get_comp_count(page, soup, mega_url)
 		#try:
 		if company_count > 400:
-			optimize = self.get_optimization_user_input()
+			optimize_input = self.get_optimization_user_input()
 			# runs based on user input to above question
-			self.optimize(optimize, company_count, soup, page, driver)
+			df = self.optimize(
+				optimize_input, company_count, soup, page, driver)
+			self.write_output(df)
 			log_time('highlight', 'Parsed main search page! \n')
 		else:
 			results = self.get_results(driver)
@@ -384,11 +386,11 @@ class Scraper():
 
 		return clickable
 	
-	#XXX would need to mock the driver, the the page and the soup and I refuse
-	# to do that for something  I can just debug I guess.
 	# Specific
-#XXX need to reformat data so that there is only one key like 'title' which
-# will contain a tuple (comp1_data, comp2_data) etc...
+#XXX need to reformat output data so that there is only one key like 
+# 'title' which will contain a tuple (comp1_data, comp2_data) etc...
+# Rather than a dict with a key and value for each company
+# e.g [{'title' : 'Amazon'}, {'title' : }...]
 	def get_results(self, driver):
 		''' Gets every aspect on main search page and stores in results. Aspects
 		include date joined and website link etc...
@@ -555,12 +557,6 @@ class Scraper():
 			entries[key] = value.encode('ascii', errors='replace')
 		return entries
 
-	#XXX is this actually helpful? 
-	def append_entries(self, entry_dict, **new_entries):
-		for entry_title, entry in new_entries:
-			entry_dict[str(entry_title)] = entry
-		return entry_dict
-
 	# Need to get signal img_src from html and pass it in to get signal value
 	def get_signal_value(self, img_src):
 		'''
@@ -608,30 +604,28 @@ class Scraper():
 				#company_count, click_sort_list, soup, page, driver)
 			df = self.get_dataframe(company_count, page, driver)
 			#XXX being weird.
-			df = df.drop_duplicates()
+			#df = df.drop_duplicates()
 			df_msg = ('\n' + 'df: ' + str(len(df)) + '\n')
 			log_time(msg=df_msg, kind='i')
+		return df
+
+	def write_output(self, df):
+		''' This function takes the pandas dataframe and writes it
+		to a csv file in the dir ../output.'''
+		df.to_csv('../output/out.csv')
 		return df
 
 #def setUp(test):
 	#test.globs['y'] = 1
 
 if __name__ == '__main__':
-	import doctest
-	import minimock
-	import unittest
-	import urllib
-	mock_dir_lst = ['mock']
-	#mock_html = './mock/html.txt'
-	#urllib.urlretrieve('https://angel.co/companies?', mock_html)
-	doctest.testmod(extraglobs={'s': Scraper(mock_dir_lst)})
+	#import minimock
 
-	# makes the var s available for testing
-	suite = doctest.DocTestSuite(
-		extraglobs={'s': Scraper(mock_dir_lst)}
-		)
-	# setUp= , tearDown= 
-	suite.run(unittest.TestResult())
+	import doctest
+	# This construction is necessary b/c Scraper expects a dir_list
+	mock_dir_lst = ['mock']
+	# makes the var s available for testing and runs tests
+	doctest.testmod(extraglobs={'s': Scraper(mock_dir_lst)})
 
 	# get url for filters and maximize individual companies:
 		# get company count

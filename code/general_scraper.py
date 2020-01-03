@@ -57,7 +57,6 @@ def write_debug_error(debug_dir, page, msg=''):
 	log_time('error', msg=fail_msg)
 
 	with open(failed_case_fname, 'w') as failed_f:
-		#failed_f.write(page.decode('utf-8'))
 		failed_f.write(page)
 
 # General
